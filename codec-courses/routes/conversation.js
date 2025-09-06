@@ -1,22 +1,18 @@
-// conversation routes
 const express = require("express");
 const authMiddleware = require("../middleware/auth");
 const router = express.Router();
 const conversationController = require("../controllers/conversation");
 
-// Create or get conversation
-router.post("/create", conversationController.createConversation);
+// ✅ إنشاء محادثة جديدة أو جلب الموجودة
+router.post("/", authMiddleware, conversationController.createConversation);
 
-// Get all user conversations
-router.get("/allmessages/:userId", conversationController.getUserConversations);
+// ✅ جلب كل المحادثات الخاصة بمستخدم
+router.get("/", authMiddleware, conversationController.getUserConversations);
 
-// Get conversation by ID
-router.get("/message/:id", conversationController.getUserConversations);
+// ✅ تحديث آخر رسالة
+router.put("/last-message", authMiddleware, conversationController.updateLastMessage);
 
-// Update last message
-router.put("/update-last-message",  conversationController.updateLastMessage);
-
-// Delete conversation
-router.delete("/delete/conversation/:id",  conversationController.deleteConversation);
+// ✅ حذف محادثة
+router.delete("/:id", authMiddleware, conversationController.deleteConversation);
 
 module.exports = router;

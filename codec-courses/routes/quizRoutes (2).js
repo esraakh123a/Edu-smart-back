@@ -2,29 +2,12 @@ const express = require('express');
 const router = express.Router();
 const quizController = require('../controllers/quizController');
 const auth = require('../middleware/auth');
-// إنشاء كويز جديد
-router.post('/', quizController.createQuiz);
 
-// جلب جميع الكويزات
-router.get('/',quizController.getAllQuizzes);
-
-// router.get('/', quizController.getAllQuizzes); // باقي زي ما هو
-// جلب كويز معين
-router.get('/:id', quizController.getQuizById);
-
-// تحديث كويز
-router.put('/:id', quizController.updateQuiz);  
-
-// حذف كويز
-router.delete('/:id', quizController.deleteQuiz);
-
-// إضافة سؤال إلى كويز
-router.post('/:id/questions', quizController.addQuestionToQuiz);
-
-// تحديث سؤال في كويز
-router.put('/:id/questions/:questionIndex',  quizController.updateQuestionInQuiz);
-
-// حذف سؤال من كويز
-router.delete('/:id/questions/:questionIndex',  quizController.deleteQuestionFromQuiz);
+router.post('/', auth, quizController.createQuiz);           // إنشاء كويز جديد
+router.get('/', auth, quizController.getAllQuizzes);         // جلب كل الكويزات
+router.get('/:id', auth, quizController.getQuizById);        // جلب كويز واحد
+router.put('/:id', auth, quizController.updateQuiz);         // تحديث كويز
+router.delete('/:id', auth, quizController.deleteQuiz);      // حذف كويز
+router.get('/course/:courseId', auth, quizController.getQuizzesByCourse); // جلب كل الكويزات لكورس معين
 
 module.exports = router;

@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const Enrollment = require("../models/Enrollments");
 const Course = require("../models/Course");
 
-// إنشاء تسجيل جديد
+// إنشاء تسجيل جديد (Course أو Package)
 const createEnrollment = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -12,17 +12,13 @@ const createEnrollment = async (req, res) => {
       return res.status(400).json({ message: "courseId or packageId is required" });
     }
 
-    // التحقق من التسجيل المكرر
     const existing = await Enrollment.findOne({ userId, $or: [{ courseId }, { packageId }] });
-    if (existing) {
-      return res.status(400).json({ message: "Already enrolled in this course/package" });
-    }
+    if (existing) return res.status(400).json({ message: "Already enrolled in this course/package" });
 
-    // إنشاء سجل جديد
-    const enrollment = new Enrollment({ userId, courseId, packageId });
+    const enrollment = new Enrollment({ userId, courseId, packageId, completedLessons: [], progress: 0 });
     await enrollment.save();
 
-    // تسجيل المستخدم في كورس فردي
+    // تسجيل المستخدم في الكورس الفردي
     if (courseId) {
       const course = await Course.findById(courseId);
       if (course) {
@@ -34,12 +30,11 @@ const createEnrollment = async (req, res) => {
       }
     }
 
-    // تسجيل المستخدم في باكج والكورسات داخلها
+    // تسجيل المستخدم في الباكج والكورسات داخلها
     if (packageId) {
       const pkg = await Course.findOne({ _id: packageId, type: "package" });
       if (!pkg) return res.status(404).json({ message: "Package not found" });
 
-      // إضافة المستخدم إلى مصفوفة students في الباكج
       pkg.students = pkg.students || [];
       if (!pkg.students.includes(userId)) {
         pkg.students.push(userId);
@@ -61,28 +56,26 @@ const createEnrollment = async (req, res) => {
       }
     }
 
-    res.status(201).json({
-      message: "Enrollment created successfully",
-      enrollment
-    });
+    res.status(201).json({ message: "Enrollment created successfully", enrollment });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// جلب كل التسجيلات للمستخدم
+// جلب كل التسجيلات للمستخدم مع populated courses/packages
 const getMyEnrollments = async (req, res) => {
   try {
     const enrollments = await Enrollment.find({ userId: req.user.id })
       .populate({
         path: "courseId",
-        select: "title description type coverImageURL",
-        match: { type: "course" }
+        select: "title description type coverImageURL lessons ",
+        populate: { path: "instructorID", select: "_id" }
       })
+
       .populate({
         path: "packageId",
-        select: "title description type packages coverImageURL",
-        match: { type: "package" }
+        select: "title description type coverImageURL package",
+
       });
 
     res.json(enrollments);
@@ -91,7 +84,7 @@ const getMyEnrollments = async (req, res) => {
   }
 };
 
-// تحديث التقدم progress
+// تحديث progress لكورس معين
 const updateProgress = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -103,11 +96,48 @@ const updateProgress = async (req, res) => {
       { new: true }
     );
 
-    if (!enrollment) {
-      return res.status(404).json({ message: "Enrollment not found" });
-    }
+    if (!enrollment) return res.status(404).json({ message: "Enrollment not found" });
 
     res.json({ message: "Progress updated", enrollment });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// تعليم درس كمكتمل وتحديث progress تلقائيًا
+const completeLesson = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { courseId, lessonId } = req.body;
+
+    const enrollment = await Enrollment.findOne({ userId, courseId });
+    if (!enrollment) return res.status(404).json({ message: "Enrollment not found" });
+
+    enrollment.completedLessons = enrollment.completedLessons || [];
+    const alreadyCompleted = enrollment.completedLessons.some(
+      l => l.lessonId.toString() === lessonId
+    );
+
+    if (!alreadyCompleted) {
+      enrollment.completedLessons.push({ lessonId, completedAt: new Date() });
+    }
+
+    const course = await Course.findById(courseId);
+    const totalLessons = course?.lessons?.length || 0;
+    const completedCount = enrollment.completedLessons.length;
+
+    enrollment.progress = totalLessons > 0
+      ? Math.round((completedCount / totalLessons) * 100)
+      : 0;
+
+    await enrollment.save();
+
+    res.json({
+      message: "Lesson marked as completed",
+      progress: enrollment.progress,
+      completedLessons: enrollment.completedLessons,
+      totalLessons
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -116,5 +146,6 @@ const updateProgress = async (req, res) => {
 module.exports = {
   createEnrollment,
   getMyEnrollments,
-  updateProgress
+  updateProgress,
+  completeLesson
 };

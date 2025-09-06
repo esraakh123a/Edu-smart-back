@@ -1,5 +1,6 @@
 const Course = require('../models/Course');
 const Lesson = require('../models/Lesson');
+const cloudinary = require('cloudinary').v2;
 
 async function calculateTotalHours(courseIds) {
     const courses = await Course.find({ _id: { $in: courseIds } });
@@ -11,34 +12,34 @@ async function calculateTotalHours(courseIds) {
 // إنشاء كورس أو باكج
 exports.createCourse = async (req, res) => {
     try {
-        if (req.body.type === 'course') {
-            req.body.instructorID = req.user.id; 
+      if (req.body.type === 'course') {
+        req.body.instructorID = req.user.id;
+      }
+  
+      if (req.body.type === 'package') {
+        if (!req.body.package || req.body.package.length === 0) {
+          return res.status(400).json({ message: "Package must include courses" });
         }
-
-        if (req.body.type === 'package') {
-            if (!req.body.package || req.body.package.length === 0) {
-                return res.status(400).json({ message: "Package must include courses" });
-            }
-            req.body.totalHours = await calculateTotalHours(req.body.package);
-        }
-
-        const newCourse = new Course(req.body);
-        const savedCourse = await newCourse.save();
-        res.status(201).json(savedCourse); 
+        req.body.totalHours = await calculateTotalHours(req.body.package);
+      }
+  
+      // لو في صورة اترفعت حطها، لو مفيش حط null أو لينك افتراضي
+      req.body.coverImageURL = req.file ? req.file.path : null;
+  
+      const newCourse = new Course(req.body);
+      const savedCourse = await newCourse.save();
+  
+      res.status(201).json(savedCourse);
     } catch (error) {
-        res.status(400).json({ message: error.message }); 
+      res.status(400).json({ message: error.message });
     }
-};
-
-
-
-
+  };
 exports.getAllCourses = async (req, res) => {
     try {
         const courses = await Course.find({ 
             type: 'course',       // فقط كورسات فردية
             // isApproved: true      
-        }).limit(10)
+        })
         .select('_id title description level language estimatedDuration coverImageURL instructorID price createdAt updatedAt type')
         .populate("instructorID", "name"); // جلب اسم المدرس فقط
 
@@ -79,6 +80,18 @@ exports.getCourseById = async (req, res) => {
     }
 };
 
+exports.getMyCourses = async (req, res) => {
+    try {
+        const courses = await Course.find({ $or: [
+            { instructorID: req.user.id },  // كورسات
+            { type: 'package' }             // كل البكجات
+        ] }).populate("instructorID", "name");
+        res.status(200).json(courses);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 // تحديث كورس أو باكج
 exports.updateCourse = async (req, res) => {
     try {
@@ -103,12 +116,13 @@ exports.updateCourse = async (req, res) => {
 
 
 exports.deleteCourse = async (req, res) => {
+    if(!req.user || (req.user.role !== "admin" && req.user.role !== "instructor")) return res.status(401).json({ message: "Unauthorized" });
     try {
         const deletedCourse = await Course.findByIdAndDelete(req.params.id); // بيبحث ويحذف الكورس
         if (!deletedCourse) {
             return res.status(404).json({ message: 'couress not found' });
         }
-        await Lesson.deleteMany({ courseID: req.params.id });
+        await Lesson.deleteOne({ courseID: req.params.id });
         res.status(200).json({ message: 'delete doneee.' });
     } catch (error) {
         res.status(500).json({ message: error.message });

@@ -224,14 +224,14 @@ exports.rejectCourse = async (req, res) => {
 const transporter = nodemailer.createTransport({
   service: "gmail", // استخدم الخدمة مباشرة بدل host/port
   auth: {
-    user: process.env.GMAIL_USER,
+    user: process.env.EMAIL,
     pass: process.env.GMAIL_APP_PASSWORD, // App Password هنا
   },
 });
 
 const sendEmail = async (to, name, messageText) => {
   const info = await transporter.sendMail({
-    from: `${process.env.FROM_NAME} <${process.env.GMAIL_USER}>`,
+    from: `${process.env.FROM_EMAIL} <${process.env.FROM_NAME}>`,
     to,
     subject: "إشعار Admin",
     html: `<p>مرحبا ${name},</p><p>${messageText}</p>`,
